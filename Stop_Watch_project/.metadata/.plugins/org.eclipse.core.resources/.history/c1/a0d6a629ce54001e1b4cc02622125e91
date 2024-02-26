@@ -1,0 +1,124 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
+#define CompareValue 977
+
+
+unsigned char flag1;
+unsigned char seconds;
+unsigned char minutes;
+unsigned char hours;
+
+
+void Timer1_Comp_Init(void){
+	TCCR1A |= (1<<FOC1A);
+	TCCR1B = (1<<CS10) | (1<<CS12) | (1<<WGM12); //prescalling 1024
+	TCNT1H = 0;
+	TCNT1L = 0;
+	OCR1A = 977;
+	TIMSK = (1<<OCIE1A);
+	SREG = (1<<7);
+}
+
+ISR(TIMER1_COMPA_vect){
+	flag1 = 1;
+
+}
+void INT0_Init(void){
+	DDRD &= ~(1<<PD2); //i/p
+	PORTD |= (1<<PD2); //internal pull up
+	MCUCR |= (1<<ISC01); //falling edge
+	GICR |= (1<<INT0);
+	SREG |= (1<<7);
+}
+
+ISR(INT0_vect){
+	TCNT1 = 0;
+
+	seconds = 0;
+	minutes = 0;
+	hours = 0;
+}
+
+void INT1_Init(void){
+	DDRD &= ~(1<<PD3); //i/p
+	//external pull down
+	MCUCR = (1<<ISC11) | (1<<ISC10); //rising edge
+	GICR |= (1<<INT1);
+	SREG |= (1<<7);
+}
+
+ISR(INT1_vect){
+	TCCR1B &= ~(1 << CS12);  // Clear the CS12 bit
+	TCCR1B &= ~(1 << CS10);  // Clear the CS11 bit
+}
+
+void INT2_Init(void){
+	DDRB &= ~(1<<PB2); //i/p
+	PORTB |= (1<<PB2); //internal pull up
+	MCUCSR &= ~(1<<ISC2); //falling edge
+	GICR |= (1<<INT2);
+	SREG |= (1<<7);
+}
+
+ISR(INT2_vect){
+	TCCR1B |= (1<<CS10) | (1<<CS12);
+
+}
+
+int main(void){
+	Timer1_Comp_Init();
+	INT0_Init();
+	INT1_Init();
+	INT2_Init();
+	DDRC |= 0x0F; //4 o/p pins for the 7-segments decoder
+	PORTC &= 0xF0; //display 0 on the six 7-segments;
+	DDRA |= 0x3F; //6 o/p pins for 7-segment enables
+	PORTA |= 0x3F; //6 enables for the six 7-segments
+	while(1){
+		flag1 = 0;
+
+		PORTA = (PORTA & 0xC0) | 0x01;
+		PORTC = (PORTC & 0xF0) | ((seconds%10) & 0x0F);
+		_delay_ms(3);
+		PORTA = (PORTA & 0xC0) | 0x02;
+		PORTC = (PORTC & 0xF0) | ((seconds/10) & 0x0F);
+		_delay_ms(3);
+		PORTA = (PORTA & 0xC0) | 0x04;
+		PORTC = (PORTC & 0xF0) | ((minutes%10) & 0x0F);
+		_delay_ms(3);
+		PORTA = (PORTA & 0xC0) | 0x08;
+		PORTC = (PORTC & 0xF0) | ((minutes/10) & 0x0F);
+		_delay_ms(3);
+		PORTA = (PORTA & 0xC0) | 0x10;
+		PORTC = (PORTC & 0xF0) | ((hours%10) & 0x0F);
+		_delay_ms(3);
+		PORTA = (PORTA & 0xC0) | 0x20;
+		PORTC = (PORTC & 0xF0) | ((hours/10) & 0x0F);
+		_delay_ms(3);
+
+		if (flag1 == 1) {
+			if (seconds < 60) {
+				seconds++;
+			}
+
+			 if (seconds == 60) {
+				minutes++;
+				seconds = 0;
+			}
+
+			if (minutes == 60) {
+				hours++;
+				minutes = 0;
+			}
+
+			if (hours == 100) {
+				hours = 0;
+			}
+		}
+
+	}
+}
+
+

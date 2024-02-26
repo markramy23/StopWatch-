@@ -1,0 +1,105 @@
+/*
+ * stop_watch.c
+ *
+ *  Created on: Sep 15, 2023
+ *      Author: Mark
+ */
+#include <avr/io.h>
+#include<avr/interrupt.h>
+#include<avr/delay.h>
+char seconds=0,minutes=0,hours=0;
+char time[6]={0};
+void timer1_init(){
+	//initializing timer 1 with compare mode and 2
+	TCCR1A|=(1<<FOC1A)|(1<<FOC1B)|(1<<WGM12);
+	TCCR1B|=(1<<CS11)|(1<<CS10);
+	TCNT1=0;
+	OCR1A=15625;
+	TIMSK|=1<<OCIE1A;
+}
+void Int0_init(){
+	DDRD&=~(1<<PD2);
+	PORTD|=1<<PD2;
+
+	MCUCR|=(1<<ISC01);
+	GICR|=1<<INT0;
+}
+void Int1_init(){
+	DDRD&=~(1<<PD3);
+
+	MCUCR|=(1<<ISC11);
+	MCUCR|=(1<<ISC10);
+	GICR|=1<<INT1;
+}
+void Int2_init(){
+	DDRB&=~(1<<PB2);
+	PORTB|=1<<PB2;
+
+	MCUCSR&=~(1<<ISC2);
+	GICR|=1<<INT2;
+}
+void IO_init(){
+	DDRC|=0x0f;
+	PORTC=0;
+	DDRA|=0x3f;
+	PORTA=0x3f;
+	DDRD|=1;
+	PORTD=0;
+}
+void time_split(){
+	time[0]=seconds%10;
+	time[1]=seconds/10;
+	time[2]=minutes%10;
+	time[3]=minutes/10;
+	time[4]=hours%10;
+	time[5]=hours/10;
+}
+ISR(TIMER1_COMPA_vect){
+	TCNT1=0;
+	seconds++;
+	if(seconds==60){
+		minutes++;
+		seconds=0;
+	}
+	if(minutes==60){
+		hours++;
+		minutes=0;
+	}
+
+}
+ISR(INT0_vect){
+	seconds=0;
+	minutes=0;
+	hours=0;
+	TCNT1=0;
+}
+ISR(INT1_vect){
+	TCCR1B&=~(1<<CS11)&~(1<<CS10);
+}
+ISR(INT2_vect){
+	TCCR1B|=(1<<CS11)|(1<<CS10);
+}
+int main(void){
+	IO_init();
+	timer1_init();
+	Int1_init();
+	Int0_init();
+	Int2_init();
+	SREG|=1<<7;
+
+	while(1){
+
+		PORTA=1;
+		for(char i=0;i<6;i++){
+			if(i==2||i==4)
+				PORTD&=~(1<<PD0);
+			else
+				PORTD|=1<<PD0;
+			PORTC=time[i];
+			_delay_ms(3);
+			PORTA=PORTA<<1;
+
+		}
+		time_split();
+	}
+}
